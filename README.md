@@ -1,0 +1,98 @@
+#include <WiFi.h> 
+#include <Wire.h> 
+#include "MAX30100_PulseOximeter.h" 
+#include <Adafruit_MLX90614.h> 
+#include <WebServer.h> 
+ 
+#define I2C_SDA 21 
+#define I2C_SCL 22 
+#define REPORTING_PERIOD_MS 1000 
+ 
+const char* ssid = "Hayder"; 
+const char* password = "20232023"; 
+ 
+Adafruit_MLX90614 mlx = Adafruit_MLX90614(); 
+PulseOximeter pox; 
+WebServer server(80); 
+ 
+uint32_t tsLastReport = 0; 
+ 
+void setup() { 
+    Serial.begin(9600); 
+    Wire.begin(I2C_SDA, I2C_SCL); 
+ 
+    // Initialize MLX90614 sensor 
+    if (!mlx.begin()) { 
+        Serial.println("Failed to initialize MLX90614."); 
+        while (1); 
+    } 
+ 
+    // Initialize MAX30100 PulseOximeter 
+    if (!pox.begin()) { 
+        Serial.println("Failed to initialize MAX30100."); 
+        while (1); 
+    } 
+    pox.setIRLedCurrent(MAX30100_LED_CURR_7_6MA); 
+ 
+    // Connect to WiFi 
+    Serial.println("Connecting to WiFi..."); 
+    WiFi.begin(ssid, password); 
+    while (WiFi.status() != WL_CONNECTED) {   delay(1000); 
+        Serial.print("."); 
+    } 
+    Serial.println("\nConnected to WiFi."); 
+    Serial.print("IP Address: "); 
+    Serial.println(WiFi.localIP()); 
+ 
+    // Start the server 
+    server.on("/", handleRoot); 
+    server.on("/data", handleData); 
+    server.begin(); 
+} 
+ 
+void loop() { 
+    server.handleClient(); 
+    pox.update(); 
+    if (millis() - tsLastReport > REPORTING_PERIOD_MS) { 
+        tsLastReport = millis(); 
+    } 
+} 
+ 
+void handleRoot() { 
+    String html = "<!DOCTYPE html><html><head><title>ESP32 Sensor 
+Data</title><style>body { font-family: Arial; text-align: center; margin
+top: 50px; } h1 { color: #333; } p { font-size: 1.5rem; 
+}</style></head><body>"; 
+    html += "<h1>ESP32 Sensor Data</h1>"; 
+    html += "<p>Temperature: <span id='temperature'>--</span> °C</p>"; 
+    html += "<p>Heart Rate: <span id='heartRate'>--</span> bpm</p>"; 
+    html += "<p>SpO2: <span id='spo2'>--</span> %</p>"; 
+    html += "<script>function fetchData() { fetch('/data').then(response => 
+response.json()).then(data => { console.log(data); 
+document.getElementById('temperature').textContent = 
+data.temperature.toFixed(2); 
+document.getElementById('heartRate').textContent = 
+data.heartRate.toFixed(2); document.getElementById('spo2').textContent = 
+data.spo2.toFixed(2); }); } setInterval(fetchData, 1000); </script>"; 
+    html += "</body></html>"; 
+ 
+    server.send(200, "text/html", html); 
+} 
+ 
+void handleData() { 
+    float temperature = mlx.readObjectTempC(); 
+    float heartRate = pox.getHeartRate(); 
+    float spo2 = pox.getSpO2(); 
+     Serial.print("Temperature: "); 
+    Serial.print(temperature); 
+    Serial.print(" °C, Heart Rate: "); 
+    Serial.print(heartRate); 
+    Serial.print(" bpm, SpO2: "); 
+    Serial.println(spo2); 
+ 
+    String json = "{\"temperature\":" + String(temperature, 2) + 
+",\"heartRate\":" + String(heartRate, 2) + ",\"spo2\":" + String(spo2, 2) + 
+"}"; 
+    server.send(200, "application/json", json); 
+} 
+
