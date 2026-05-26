@@ -1,3 +1,6 @@
+change the I2C_BUS_SPEED from 400000UL to 100000UL in the document MAX30100.h in the files  Because the MAX30100 and MLX90614 sensors 
+can operate at the same communication speed they may interfere with each other,causing signal loss from one or both sensors.
+
 #include <WiFi.h> 
 #include <Wire.h> 
 #include "MAX30100_PulseOximeter.h" 
